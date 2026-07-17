@@ -24,7 +24,6 @@
 
     <div class="flex items-center bg-[#181818] border-b border-[#2d2d2d] px-1 h-8 shrink-0">
         <div id="tab-container" class="flex gap-0.5 overflow-x-auto no-scrollbar h-full items-end"></div>
-        
         <button id="add-tab-btn" class="ml-1 mb-0.5 p-1 rounded text-gray-400 hover:text-white hover:bg-[#2d2d2d] transition-all" title="New Script">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3.5 h-3.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -35,7 +34,6 @@
     <div id="editor" class="flex-grow w-full h-full"></div>
 
     <script>
-        // CRITICAL FIX: Bypasses browser cross-origin web worker restrictions on live public domains
         window.MonacoEnvironment = {
             getWorkerUrl: function (moduleId, label) {
                 return 'data:text/javascript;charset=utf-8,' + encodeURIComponent(
@@ -54,11 +52,8 @@
         const MAX_TABS = 6;
 
         require(['vs/editor/editor.main'], function() {
-            
-            // 1. REGISTER THE CUSTOM LANGUAGE
             monaco.languages.register({ id: 'roblox-lua' });
 
-            // 2. CONFIGURE THE CUSTOM SYNTAX HIGHLIGHTER (MONARCH)
             monaco.languages.setMonarchTokensProvider('roblox-lua', {
                 keywords: [
                     'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
@@ -91,24 +86,22 @@
                 }
             });
 
-            // 3. APPLY STYLES AND COLORS TO THE CODES
             monaco.editor.defineTheme('roblox-dark', {
                 base: 'vs-dark',
                 inherit: true,
                 rules: [
-                    { token: 'variable.predefined', foreground: '4fc1ff', fontStyle: 'bold' }, // game, workspace, script (Light Blue)
-                    { token: 'keyword.function', foreground: 'dcdcaa' },                       // loadstring, print, warn (Yellow-Gold)
-                    { token: 'keyword', foreground: 'c586c0' },                                // local, function, if (Purple)
-                    { token: 'comment', foreground: '6a9955' },                                // (Green)
-                    { token: 'string', foreground: 'ce9178' },                                 // (Salmon)
-                    { token: 'number', foreground: 'b5cea8' }                                  // (Light Green)
+                    { token: 'variable.predefined', foreground: '4fc1ff', fontStyle: 'bold' },
+                    { token: 'keyword.function', foreground: 'dcdcaa' },
+                    { token: 'keyword', foreground: 'c586c0' },
+                    { token: 'comment', foreground: '6a9955' },
+                    { token: 'string', foreground: 'ce9178' },
+                    { token: 'number', foreground: 'b5cea8' }
                 ],
                 colors: {
                     'editor.background': '#1e1e1e'
                 }
             });
 
-            // 4. REGISTER THE INTELLISENSE AUTOCOMPLETE ENTRIES
             monaco.languages.registerCompletionItemProvider('roblox-lua', {
                 provideCompletionItems: function(model, position) {
                     const suggestions = [
@@ -162,7 +155,6 @@
                 }
             });
 
-            // 5. BOOT THE INITIAL EDITOR INSTANCE WITH STYLING
             editorInstance = monaco.editor.create(document.getElementById('editor'), {
                 theme: 'roblox-dark',
                 automaticLayout: true,
@@ -191,8 +183,7 @@
             const tabName = `script${id}.lua`;
             tabIdCounter++;
 
-            // Create initial model with sample strings demonstrating your target highlighted code phrases
-            const model = monaco.editor.createModel(`-- Welcome to Quantum-Script --\n\ngame.Workspace.Part:Destroy()\nlocal code = loadstring("print('Code loaded successfully')")\n`, 'roblox-lua');
+            const model = monaco.editor.createModel(`-- Welcome to Quantum-Script --`, 'roblox-lua');
 
             const tab = { id, name: tabName, model };
             tabs.push(tab);
