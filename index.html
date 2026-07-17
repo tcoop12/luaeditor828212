@@ -15,7 +15,6 @@
             background-color: #1e1e1e;
             font-family: system-ui, -apple-system, sans-serif;
         }
-        /* Custom scrollbar for tab bar */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
@@ -24,9 +23,7 @@
 <body class="flex flex-col h-screen select-none">
 
     <div class="flex items-center bg-[#181818] border-b border-[#2d2d2d] px-1 h-8 shrink-0">
-        <div id="tab-container" class="flex gap-0.5 overflow-x-auto no-scrollbar h-full items-end">
-            </div>
-        
+        <div id="tab-container" class="flex gap-0.5 overflow-x-auto no-scrollbar h-full items-end"></div>
         <button id="add-tab-btn" class="ml-1 mb-0.5 p-1 rounded text-gray-400 hover:text-white hover:bg-[#2d2d2d] transition-all" title="New Script">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3.5 h-3.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -37,22 +34,88 @@
     <div id="editor" class="flex-grow w-full h-full"></div>
 
     <script>
-        // Load Monaco Editor
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' }});
 
         let editorInstance;
         let tabs = [];
         let activeTabId = null;
         let tabIdCounter = 1;
-        const MAX_TABS = 6; // Script cap limit
+        const MAX_TABS = 6;
 
         require(['vs/editor/editor.main'], function() {
             
-            // 1. REGISTER LUA AUTOCOMPLETE PROVIDER WITH ROBLOX & LOADSTRING EXTENSIONS
-            monaco.languages.registerCompletionItemProvider('lua', {
+            // 1. REGISTER CUSTOM ROBLOX LUA LANGUAGE FOR HIGHLIGHTING
+            monaco.languages.register({ id: 'roblox-lua' });
+
+            monaco.languages.setMonarchTokensProvider('roblox-lua', {
+                defaultToken: '',
+                tokenPostfix: '.lua',
+                keywords: [
+                    'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
+                    'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat',
+                    'return', 'then', 'true', 'until', 'while'
+                ],
+                robloxGlobals: [
+                    'game', 'workspace', 'script', 'shared', '_G', '_VERSION'
+                ],
+                customFunctions: [
+                    'loadstring', 'print', 'warn', 'error', 'pairs', 'ipairs', 
+                    'type', 'tostring', 'tonumber', 'assert', 'getfenv', 'setfenv'
+                ],
+                brackets: [
+                    { token: 'delimiter.bracket', open: '{', close: '}' },
+                    { token: 'delimiter.array', open: '[', close: ']' },
+                    { token: 'delimiter.parenthesis', open: '(', close: ')' }
+                ],
+                tokenizer: {
+                    root: [
+                        // Identifiers and keywords
+                        [/[a-zA-Z_]\w*/, {
+                            cases: {
+                                '@keywords': 'keyword',
+                                '@robloxGlobals': 'variable.predefined',
+                                '@customFunctions': 'keyword.function',
+                                '@default': 'identifier'
+                            }
+                        }],
+                        // Whitespace
+                        { include: '@whitespace' },
+                        // Delimiters
+                        [/[{}()\[\]]/, '@brackets'],
+                        // Strings
+                        [/"([^"\\]|\\.)*"/, 'string'],
+                        [/'([^'\\]|\\.)*'/, 'string'],
+                        // Numbers
+                        [/\d+/, 'number'],
+                    ],
+                    whitespace: [
+                        [/[ \t\r\n]+/, ''],
+                        [/--.*$/, 'comment'],
+                    ]
+                }
+            });
+
+            // 2. DEFINE THEME WITH CUSTOM COLORS FOR CODES
+            monaco.editor.defineTheme('roblox-dark', {
+                base: 'vs-dark',
+                inherit: true,
+                rules: [
+                    { token: 'variable.predefined', foreground: '4fc1ff', fontStyle: 'bold' }, // game, workspace, script
+                    { token: 'keyword.function', foreground: 'dcdcaa' },                       // loadstring, print, warn
+                    { token: 'keyword', foreground: 'c586c0' },                                // local, function, if
+                    { token: 'comment', foreground: '6a9955' },
+                    { token: 'string', foreground: 'ce9178' },
+                    { token: 'number', foreground: 'b5cea8' }
+                ],
+                colors: {
+                    'editor.background': '#1e1e1e'
+                }
+            });
+
+            // 3. REGISTER AUTOCOMPLETE PROVIDER FOR THE CUSTOM LANGUAGE
+            monaco.languages.registerCompletionItemProvider('roblox-lua', {
                 provideCompletionItems: function(model, position) {
                     const suggestions = [
-                        // Core Keywords
                         { label: 'local', kind: monaco.languages.CompletionItemKind.Keyword, insertText: 'local ' },
                         { label: 'function', kind: monaco.languages.CompletionItemKind.Keyword, insertText: 'function ' },
                         { label: 'if', kind: monaco.languages.CompletionItemKind.Keyword, insertText: 'if ${1:condition} then\n\t$0\nend', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
@@ -67,39 +130,21 @@
                         { label: 'while', kind: monaco.languages.CompletionItemKind.Keyword, insertText: 'while ${1:condition} do\n\t$0\nend', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
                         { label: 'for', kind: monaco.languages.CompletionItemKind.Keyword, insertText: 'for ${1:i} = ${2:1}, ${3:10} do\n\t$0\nend', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
                         
-                        // Standard Functions (Including loadstring)
                         { label: 'print', kind: monaco.languages.CompletionItemKind.Function, insertText: 'print($0)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
                         { label: 'warn', kind: monaco.languages.CompletionItemKind.Function, insertText: 'warn($0)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        { label: 'loadstring', kind: monaco.languages.CompletionItemKind.Function, insertText: 'loadstring(${1:code})()', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, documentation: 'Compiles and runs a string as Lua code code.' },
+                        { label: 'loadstring', kind: monaco.languages.CompletionItemKind.Function, insertText: 'loadstring(${1:code})()', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
                         { label: 'pairs', kind: monaco.languages.CompletionItemKind.Function, insertText: 'pairs($0)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
                         { label: 'ipairs', kind: monaco.languages.CompletionItemKind.Function, insertText: 'ipairs($0)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
                         { label: 'type', kind: monaco.languages.CompletionItemKind.Function, insertText: 'type($0)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        { label: 'tostring', kind: monaco.languages.CompletionItemKind.Function, insertText: 'tostring($0)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        { label: 'tonumber', kind: monaco.languages.CompletionItemKind.Function, insertText: 'tonumber($0)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
 
-                        // Roblox Globals & Environment
                         { label: 'game', kind: monaco.languages.CompletionItemKind.Class, insertText: 'game' },
                         { label: 'workspace', kind: monaco.languages.CompletionItemKind.Class, insertText: 'workspace' },
                         { label: 'script', kind: monaco.languages.CompletionItemKind.Variable, insertText: 'script' },
                         { label: 'Instance.new', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Instance.new("${1:ClassName}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
                         { label: 'Vector3.new', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Vector3.new(${1:x}, ${2:y}, ${3:z})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        { label: 'CFrame.new', kind: monaco.languages.CompletionItemKind.Method, insertText: 'CFrame.new($0)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        { label: 'Color3.fromRGB', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Color3.fromRGB(${1:r}, ${2:g}, ${3:b})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        
-                        // Roblox Common Methods
-                        { label: 'GetService', kind: monaco.languages.CompletionItemKind.Method, insertText: 'GetService("${1:ServiceName}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        { label: 'WaitForChild', kind: monaco.languages.CompletionItemKind.Method, insertText: 'WaitForChild("${1:ChildName}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        { label: 'FindFirstChild', kind: monaco.languages.CompletionItemKind.Method, insertText: 'FindFirstChild("${1:ChildName}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        { label: 'Destroy', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Destroy()' },
-                        { label: 'Clone', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Clone()' },
-                        
-                        // Roblox task Scheduler Library
-                        { label: 'task.wait', kind: monaco.languages.CompletionItemKind.Method, insertText: 'task.wait(${1:seconds})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        { label: 'task.spawn', kind: monaco.languages.CompletionItemKind.Method, insertText: 'task.spawn(${1:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
-                        { label: 'task.defer', kind: monaco.languages.CompletionItemKind.Method, insertText: 'task.defer(${1:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet }
+                        { label: 'task.wait', kind: monaco.languages.CompletionItemKind.Method, insertText: 'task.wait(${1:seconds})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet }
                     ];
 
-                    // Read local variables dynamically
                     const wordRegex = /\blocal\s+([a-zA-Z_]\w*)/g;
                     const codeText = model.getValue();
                     let match;
@@ -121,9 +166,9 @@
                 }
             });
 
-            // 2. INITIALIZE MONACO WITH COMPACT STYLING
+            // 4. INITIALIZE EDITOR WITH NEW THEME
             editorInstance = monaco.editor.create(document.getElementById('editor'), {
-                theme: 'vs-dark',
+                theme: 'roblox-dark',
                 automaticLayout: true,
                 fontSize: 12,
                 fontFamily: "Consolas, 'Courier New', monospace",
@@ -136,16 +181,13 @@
                 wordBasedSuggestions: "allDocuments"
             });
 
-            // Create initial default tab
             createNewTab();
 
-            // Event listener for adding new tabs
             document.getElementById('add-tab-btn').addEventListener('click', () => {
                 createNewTab();
             });
         });
 
-        // Function to create a new tab sequentially
         function createNewTab() {
             if (tabs.length >= MAX_TABS) return;
 
@@ -153,20 +195,15 @@
             const tabName = `script${id}.lua`;
             tabIdCounter++;
 
-            const model = monaco.editor.createModel(`-- Welcome to Quantum-Script --\n\n`, 'lua');
+            // Assign model to our new 'roblox-lua' custom highlighting configuration
+            const model = monaco.editor.createModel(`-- Welcome to Quantum-Script --\n\ngame.Workspace.Part:Destroy()\nloadstring("print('Hello')")()\n`, 'roblox-lua');
 
-            const tab = {
-                id: id,
-                name: tabName,
-                model: model
-            };
-
+            const tab = { id, name: tabName, model };
             tabs.push(tab);
             renderTabs();
             switchTab(id);
         }
 
-        // Render compact tab list UI
         function renderTabs() {
             const container = document.getElementById('tab-container');
             container.innerHTML = '';
@@ -187,7 +224,6 @@
                 titleSpan.textContent = tab.name;
                 tabEl.appendChild(titleSpan);
 
-                // Close Button
                 if (tabs.length > 1) {
                     const closeBtn = document.createElement('button');
                     closeBtn.className = "hover:bg-[#2d2d2d] rounded-full p-0.5 ml-0.5 transition-all";
@@ -214,7 +250,6 @@
             }
         }
 
-        // Switch active tab
         function switchTab(id) {
             activeTabId = id;
             const targetTab = tabs.find(t => t.id === id);
@@ -224,7 +259,6 @@
             renderTabs();
         }
 
-        // Close selected tab
         function closeTab(id) {
             const index = tabs.findIndex(t => t.id === id);
             if (index !== -1) {
@@ -243,7 +277,6 @@
             }
         }
 
-        // Rename script manually
         function renameTab(id) {
             const tab = tabs.find(t => t.id === id);
             if (tab) {
